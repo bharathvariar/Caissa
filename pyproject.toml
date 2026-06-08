@@ -8,3 +8,8 @@ dependencies = [
     "python-chess>=1.999",
     "requests>=2.34.2",
 ]
+
+[dependency-groups]
+dev = [
+    "ruff>=0.15.16",
+]
