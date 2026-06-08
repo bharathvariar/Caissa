@@ -2,6 +2,15 @@ from src.db.connection import get_connection
 
 
 def win_rate_by_time_class(username: str) -> list[dict]:
+    """
+    Calculate win rate grouped by time class for a user.
+
+    Args:
+        username (str): Chess.com username.
+
+    Returns:
+        list[dict]: One dict per time class with keys: time_class, games, wins, win_rate.
+    """
     sql = """
         SELECT
             time_class,
@@ -27,6 +36,15 @@ def win_rate_by_time_class(username: str) -> list[dict]:
 
 
 def rating_over_time(username: str) -> list[dict]:
+    """
+    Calculate average rating per calendar month for a user.
+
+    Args:
+        username (str): Chess.com username.
+
+    Returns:
+        list[dict]: One dict per month with keys: month (YYYY-MM), avg_rating.
+    """
     sql = """
         SELECT
             strftime('%Y-%m', datetime(end_time, 'unixepoch')) AS month,
@@ -47,6 +65,16 @@ def rating_over_time(username: str) -> list[dict]:
 
 
 def top_openings(username: str, limit: int = 10) -> list[dict]:
+    """
+    Return the most frequently played openings for a user with win rates.
+
+    Args:
+        username (str): Chess.com username.
+        limit (int): Maximum number of openings to return. Defaults to 10.
+
+    Returns:
+        list[dict]: One dict per opening with keys: eco_url, games, wins, win_rate.
+    """
     sql = """
         SELECT
             eco_url,
