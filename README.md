@@ -25,13 +25,49 @@ Chess truth is derived from:
 ## Architecture (MVP)
 Chess.com API
 ↓
-Ingestion Layer (to be implemented)
+Ingestion Layer
 ↓
 SQLite Storage
 ↓
-Analysis Layer (to be implemented)
+Analysis Layer
 ↓
 Vector Database and RAG Layer (future)
+
+## Usage
+
+### 1. Download raw archives
+
+```bash
+python -m src.ingestion.downloader <username>
+```
+
+Fetches all monthly game archives from Chess.com and saves them to `data/users/<username>/raw/`. Skips months already on disk.
+
+### 2. Normalize into SQLite
+
+```bash
+python -m src.ingestion.normalizer <username>
+```
+
+Parses raw JSON archives and upserts games into `data/caissa.db`. Safe to re-run — duplicate games are ignored.
+
+### 3. Run analysis
+
+```bash
+python -m src.analysis.cli <username> <command>
+```
+
+| Command | Description |
+| --- | --- |
+| `win-rate` | Win rate by time class (bullet / blitz / rapid) |
+| `rating` | Average rating per month |
+| `openings` | Top 10 most played openings with win rate |
+
+Example:
+
+```bash
+python -m src.analysis.cli costellof win-rate
+```
 
 ## Technology Stack
 
