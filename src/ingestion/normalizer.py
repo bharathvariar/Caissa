@@ -20,6 +20,17 @@ INSERT OR IGNORE INTO games (
 
 
 def _parse_game(game: dict) -> dict:
+    """
+    Extract and flatten fields from a raw Chess.com game object.
+
+    Accuracies are optional — Chess.com omits them for some games.
+
+    Args:
+        game (dict): Raw game object from a Chess.com archive response.
+
+    Returns:
+        dict: Flat dict matching the games table column names.
+    """
     accuracies = game.get("accuracies", {})
     return {
         "uuid": game["uuid"],
@@ -42,6 +53,18 @@ def _parse_game(game: dict) -> dict:
 
 
 def normalize_user(username: str) -> None:
+    """
+    Parse all raw archives for a user and upsert games into SQLite.
+
+    Reads every JSON file under data/users/{username}/raw/, parses each game,
+    and inserts it using INSERT OR IGNORE — safe to re-run without duplicating rows.
+
+    Args:
+        username (str): Chess.com username whose raw archives to normalize.
+
+    Returns:
+        None
+    """
     init_db()
     raw_dir = Path(f"data/users/{username}/raw")
     files = sorted(raw_dir.glob("*.json"))

@@ -23,5 +23,13 @@ CREATE TABLE IF NOT EXISTS games (
 
 
 def init_db() -> None:
+    """
+    Create database tables if they do not already exist.
+
+    Safe to call on every application startup — uses CREATE TABLE IF NOT EXISTS.
+
+    Returns:
+        None
+    """
     with get_connection() as conn:
         conn.execute(CREATE_GAMES)

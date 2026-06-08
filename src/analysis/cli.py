@@ -11,6 +11,14 @@ COMMANDS = {
 
 
 def main() -> None:
+    """
+    Entry point for the analysis CLI.
+
+    Dispatches to a stat function by command name and prints JSON output.
+
+    Returns:
+        None
+    """
     if len(sys.argv) < 3 or sys.argv[2] not in COMMANDS:
         print(f"Usage: python -m src.analysis.cli <username> <{'|'.join(COMMANDS)}>")
         sys.exit(1)
