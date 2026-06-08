@@ -8,6 +8,7 @@ dependencies = [
     "ollama>=0.6.2",
     "python-chess>=1.999",
     "qdrant-client>=1.18.0",
+    "psutil>=6.0.0",
     "requests>=2.34.2",
 ]
 
