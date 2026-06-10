@@ -130,6 +130,10 @@ def _evaluate_game(
     if game is None:
         return [], {}
 
+    variant = game.headers.get("Variant", "").lower()
+    if variant and variant not in ("", "standard", "chess"):
+        return [], {}
+
     white_name = game.headers.get("White", "")
     player_side = chess.WHITE if white_name.lower() == username.lower() else chess.BLACK
     player_color_str = "white" if player_side == chess.WHITE else "black"

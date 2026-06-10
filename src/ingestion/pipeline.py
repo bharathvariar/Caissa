@@ -55,7 +55,10 @@ def _eval_worker(
                 print(f"\n[EVAL   ] Batch {b_idx}/{total_batches} — {batch_size} games", flush=True)
                 uuids = []
                 for i, row in enumerate(batch, 1):
-                    move_rows, game_eval = _evaluate_game(engine, row["uuid"], row["pgn"], username)
+                    try:
+                        move_rows, game_eval = _evaluate_game(engine, row["uuid"], row["pgn"], username)
+                    except chess.engine.EngineError:
+                        continue
                     if not game_eval:
                         continue
                     conn.executemany(INSERT_MOVE, move_rows)
@@ -75,6 +78,7 @@ def _eval_worker(
                         flush=True,
                     )
 
+                conn.commit()
                 elapsed = _fmt_duration(time.monotonic() - batch_start)
                 print(f"\n[EVAL   ] Batch {b_idx}/{total_batches} done in {elapsed}", flush=True)
                 batch_queue.put((b_idx, uuids))
