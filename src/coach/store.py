@@ -45,10 +45,10 @@ def _game_to_text(game: dict, username: str) -> str:
     Convert a game row into a plain English sentence for embedding.
 
     Describes the date, sides, ratings, result, opening, time class,
-    and accuracy (if available) from the perspective of username.
+    accuracy (if available), and Stockfish evaluation (if available).
 
     Args:
-        game (dict): Row from the games table as a dict.
+        game (dict): Row from games LEFT JOIN game_evaluations as a dict.
         username (str): The player whose perspective to use.
 
     Returns:
@@ -77,45 +77,38 @@ def _game_to_text(game: dict, username: str) -> str:
     ]
     if user_acc is not None:
         parts.append(f"Accuracy: {username} {user_acc:.1f}%, opponent {opp_acc:.1f}%.")
+    if game.get("avg_centipawn_loss") is not None:
+        parts.append(
+            f"Stockfish: {game['blunders']} blunders, {game['mistakes']} mistakes, "
+            f"{game['inaccuracies']} inaccuracies, avg centipawn loss {game['avg_centipawn_loss']:.1f}."
+        )
 
     return " ".join(parts)
 
 
-def index_user(username: str) -> None:
-    """
-    Embed all games for a user and upsert them into Qdrant.
+_GAMES_WITH_EVALS = """
+    SELECT
+        g.*,
+        ge.blunders, ge.mistakes, ge.inaccuracies,
+        ge.avg_centipawn_loss, ge.sharpest_cp_swing
+    FROM games g
+    LEFT JOIN game_evaluations ge ON g.uuid = ge.game_uuid AND ge.username = ?
+    WHERE {where}
+"""
 
-    Creates the collection if it does not exist. Safe to re-run —
-    existing points are overwritten with updated payloads (idempotent).
 
-    Args:
-        username (str): Chess.com username whose games to index.
-
-    Returns:
-        None
-    """
-    client = _get_client()
-
+def _ensure_collection(client: QdrantClient) -> None:
     if not client.collection_exists(COLLECTION):
         print(f"[SETUP] Creating Qdrant collection '{COLLECTION}'")
         client.create_collection(
             collection_name=COLLECTION,
             vectors_config=VectorParams(size=VECTOR_SIZE, distance=Distance.COSINE),
         )
-    else:
-        print(f"[SETUP] Collection '{COLLECTION}' already exists — upserting")
 
-    with get_connection() as conn:
-        rows = conn.execute(
-            "SELECT * FROM games WHERE white_username = ? OR black_username = ?",
-            (username, username),
-        ).fetchall()
 
-    total = len(rows)
-    print(f"[INFO] {total} games to index for {username}")
-
+def _rows_to_points(rows: list, username: str) -> list[PointStruct]:
     points = []
-    for i, row in enumerate(rows):
+    for row in rows:
         game = dict(row)
         side = "white" if game["white_username"].lower() == username.lower() else "black"
         result = game["white_result"] if side == "white" else game["black_result"]
@@ -134,14 +127,76 @@ def index_user(username: str) -> None:
                 },
             )
         )
-        completed = i + 1
-        if completed % 50 == 0 or completed == total:
-            pct = completed / total * 100
-            print(f"[PROGRESS] {completed}/{total} ({pct:.0f}%) games embedded", flush=True)
+    return points
+
+
+def index_user(username: str) -> None:
+    """
+    Embed all games for a user and upsert them into Qdrant.
+
+    Creates the collection if it does not exist. Safe to re-run —
+    existing points are overwritten with updated payloads (idempotent).
+    Includes Stockfish evaluation data if available.
+
+    Args:
+        username (str): Chess.com username whose games to index.
+
+    Returns:
+        None
+    """
+    client = _get_client()
+    _ensure_collection(client)
+
+    with get_connection() as conn:
+        rows = conn.execute(
+            _GAMES_WITH_EVALS.format(where="g.white_username = ? OR g.black_username = ?"),
+            (username, username, username),
+        ).fetchall()
+
+    total = len(rows)
+    print(f"[INFO] {total} games to index for {username}")
+
+    points = []
+    for i, row in enumerate(rows, 1):
+        points.extend(_rows_to_points([row], username))
+        if i % 50 == 0 or i == total:
+            print(f"[PROGRESS] {i}/{total} ({round(i / total * 100)}%) games embedded", flush=True)
 
     print("[INFO] Upserting to Qdrant...", flush=True)
     client.upsert(collection_name=COLLECTION, points=points)
     print(f"[DONE] Indexed {len(points)} games into Qdrant")
+
+
+def index_games(username: str, uuids: list[str]) -> None:
+    """
+    Embed a specific list of games and upsert them into Qdrant.
+
+    Used by the pipeline to index each evaluated batch immediately after
+    Stockfish finishes it. Includes Stockfish data from game_evaluations.
+
+    Args:
+        username (str): Chess.com username the games belong to.
+        uuids (list[str]): Game UUIDs to embed and upsert.
+
+    Returns:
+        None
+    """
+    if not uuids:
+        return
+
+    client = _get_client()
+    _ensure_collection(client)
+
+    placeholders = ",".join("?" * len(uuids))
+    with get_connection() as conn:
+        rows = conn.execute(
+            _GAMES_WITH_EVALS.format(where=f"g.uuid IN ({placeholders})"),
+            (username, *uuids),
+        ).fetchall()
+
+    points = _rows_to_points(rows, username)
+    client.upsert(collection_name=COLLECTION, points=points)
+    print(f"[INDEX ] {len(points)} games upserted to Qdrant", flush=True)
 
 
 def search(username: str, query: str, top_k: int = 20, filters: dict | None = None, verbose: bool = False) -> list[str]:
@@ -171,7 +226,7 @@ def search(username: str, query: str, top_k: int = 20, filters: dict | None = No
     if verbose:
         active = {k: v for k, v in (filters or {}).items()}
         print(f"[VERBOSE] Filters applied: username={username}" + (f", {active}" if active else ""))
-        print(f"[VERBOSE] Embedding query...", flush=True)
+        print("[VERBOSE] Embedding query...", flush=True)
 
     vector = embed(query)
 

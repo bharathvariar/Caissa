@@ -21,6 +21,31 @@ CREATE TABLE IF NOT EXISTS games (
 );
 """
 
+CREATE_MOVE_EVALUATIONS = """
+CREATE TABLE IF NOT EXISTS move_evaluations (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    game_uuid       TEXT NOT NULL REFERENCES games(uuid),
+    move_number     INTEGER NOT NULL,
+    side            TEXT NOT NULL,
+    uci             TEXT NOT NULL,
+    cp_score        INTEGER,
+    best_uci        TEXT,
+    classification  TEXT NOT NULL
+);
+"""
+
+CREATE_GAME_EVALUATIONS = """
+CREATE TABLE IF NOT EXISTS game_evaluations (
+    game_uuid           TEXT PRIMARY KEY REFERENCES games(uuid),
+    username            TEXT NOT NULL,
+    blunders            INTEGER NOT NULL DEFAULT 0,
+    mistakes            INTEGER NOT NULL DEFAULT 0,
+    inaccuracies        INTEGER NOT NULL DEFAULT 0,
+    avg_centipawn_loss  REAL,
+    sharpest_cp_swing   INTEGER
+);
+"""
+
 
 def init_db() -> None:
     """
@@ -33,3 +58,5 @@ def init_db() -> None:
     """
     with get_connection() as conn:
         conn.execute(CREATE_GAMES)
+        conn.execute(CREATE_MOVE_EVALUATIONS)
+        conn.execute(CREATE_GAME_EVALUATIONS)
